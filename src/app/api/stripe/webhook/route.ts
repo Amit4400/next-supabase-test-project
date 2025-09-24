@@ -95,6 +95,8 @@ async function handleSubscriptionChange(
     return
   }
 
+  console.log('Subscription metadata:', subscription.metadata)
+
   // Get or create subscription record
   const { data: existingSubscription } = await supabase
     .from('subscriptions')
@@ -107,11 +109,11 @@ async function handleSubscriptionChange(
     stripe_subscription_id: subscription.id,
     stripe_customer_id: customerId,
     status: subscription.status as any,
-    current_period_start: subscription.start_date
-      ? new Date(subscription.start_date * 1000).toISOString()
+    current_period_start: (subscription as any).current_period_start
+      ? new Date((subscription as any).current_period_start * 1000).toISOString()
       : null,
-    current_period_end: subscription.ended_at
-      ? new Date(subscription.ended_at * 1000).toISOString()
+    current_period_end: (subscription as any).current_period_end
+      ? new Date((subscription as any).current_period_end * 1000).toISOString()
       : null,
     trial_start: subscription.trial_start
       ? new Date(subscription.trial_start * 1000).toISOString()
@@ -119,7 +121,8 @@ async function handleSubscriptionChange(
     trial_end: subscription.trial_end
       ? new Date(subscription.trial_end * 1000).toISOString()
       : null,
-    plan_id: subscription.metadata.planId || 'unknown',
+    plan_id: subscription.metadata.planId || subscription.metadata.addonId || 
+             (subscription.items?.data?.[0]?.price?.nickname) || 'unknown',
   }
 
   if (existingSubscription) {
@@ -135,24 +138,49 @@ async function handleSubscriptionChange(
 
   // Handle add-ons
   const addons = JSON.parse(subscription.metadata.addons || '[]')
+  const subscriptionType = subscription.metadata.type || 'plan'
   
-  // Clear existing add-ons
-  await supabase
-    .from('subscription_addons')
-    .delete()
-    .eq('subscription_id', existingSubscription?.id)
+  // Get the subscription ID after creation/update
+  const { data: subscriptionRecord } = await supabase
+    .from('subscriptions')
+    .select('id')
+    .eq('stripe_subscription_id', subscription.id)
+    .single()
 
-  // Add new add-ons
-  if (addons.length > 0 && existingSubscription) {
-    const addonData = addons.map((addonId: string) => ({
-      subscription_id: existingSubscription.id,
-      addon_id: addonId,
-      quantity: 1,
-    }))
+  if (subscriptionType === 'addon') {
+    // This is an add-on subscription - add it to the subscription
+    const addonId = subscription.metadata.addonId
+    if (addonId && subscriptionRecord?.id) {
+      await supabase
+        .from('subscription_addons')
+        .insert({
+          subscription_id: subscriptionRecord.id,
+          addon_id: addonId,
+          quantity: 1,
+        })
+    }
+  } else {
+    // This is a plan subscription - handle add-ons as before
+    // Clear existing add-ons
+    if (subscriptionRecord?.id) {
+      await supabase
+        .from('subscription_addons')
+        .delete()
+        .eq('subscription_id', subscriptionRecord.id)
 
-    await supabase
-      .from('subscription_addons')
-      .insert(addonData)
+      // Add new add-ons
+      if (addons.length > 0) {
+        const addonData = addons.map((addonId: string) => ({
+          subscription_id: subscriptionRecord.id,
+          addon_id: addonId,
+          quantity: 1,
+        }))
+
+        await supabase
+          .from('subscription_addons')
+          .insert(addonData)
+      }
+    }
   }
 
   console.log(`Processed subscription ${subscription.id} for user ${userId}`)

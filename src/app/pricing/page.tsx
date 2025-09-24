@@ -53,13 +53,13 @@ export default function PricingPage() {
         console.error('Error fetching data:', error)
       }
     }
-    
+
     fetchData()
   }, [])
 
   const handleCheckout = async () => {
     setLoading(true)
-    
+
     try {
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
@@ -73,7 +73,7 @@ export default function PricingPage() {
       })
 
       const { sessionId } = await response.json()
-      
+
       const stripe = await stripePromise
       if (stripe) {
         const { error } = await stripe.redirectToCheckout({ sessionId })
@@ -90,7 +90,7 @@ export default function PricingPage() {
 
   const handleBillingPortal = async () => {
     setLoading(true)
-    
+
     try {
       const response = await fetch('/api/stripe/create-portal-session', {
         method: 'POST',
@@ -100,7 +100,7 @@ export default function PricingPage() {
       })
 
       const { url } = await response.json()
-      
+
       if (url) {
         window.location.href = url
       }
@@ -112,9 +112,39 @@ export default function PricingPage() {
     }
   }
 
+  const handleAddonCheckout = async (addonId: string) => {
+    setLoading(true)
+
+    try {
+      const response = await fetch('/api/stripe/create-addon-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          addonId,
+        }),
+      })
+
+      const { sessionId } = await response.json()
+
+      const stripe = await stripePromise
+      if (stripe) {
+        const { error } = await stripe.redirectToCheckout({ sessionId })
+        if (error) {
+          console.error('Error:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Error creating add-on checkout session:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const toggleAddon = (addonId: string) => {
-    setSelectedAddons(prev => 
-      prev.includes(addonId) 
+    setSelectedAddons(prev =>
+      prev.includes(addonId)
         ? prev.filter(id => id !== addonId)
         : [...prev, addonId]
     )
@@ -122,7 +152,7 @@ export default function PricingPage() {
 
   const calculateTotal = () => {
     if (!plansData) return 0
-    
+
     const planPrice = plansData.plans[selectedPlan].price
     const addonPrice = selectedAddons.reduce((total, addonId) => {
       return total + plansData.addons[addonId].price
@@ -144,8 +174,16 @@ export default function PricingPage() {
   // Show different UI for existing subscribers
   if (subscriptionStatus.hasActiveSubscription) {
     const subscription = subscriptionStatus.subscription
-    const currentPlan = plansData.plans[subscription.plan_id] || { name: subscription.plan_id }
-    
+    console.log(subscription);
+    const currentPlan = plansData.plans[subscription.plan_id] ||
+      plansData.addons[subscription.plan_id] ||
+    {
+      name: subscription.plan_id === 'extra_storage' ? 'Extra Storage' :
+        subscription.plan_id === 'premium_support' ? 'Premium Support' :
+          subscription.plan_id === 'advanced_analytics' ? 'Advanced Analytics' :
+            subscription.plan_id
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -200,6 +238,53 @@ export default function PricingPage() {
               </p>
             </div>
           </div>
+
+          {/* Available Add-ons Section */}
+          <div className="bg-white rounded-lg shadow p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Available Add-ons</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {Object.entries(plansData.addons).map(([addonId, addon]) => {
+                const isAlreadyActive = subscription.subscription_addons?.some(
+                  (activeAddon: any) => activeAddon.addon_id === addonId
+                )
+
+                return (
+                  <div
+                    key={addonId}
+                    className={`border-2 rounded-lg p-6 ${isAlreadyActive
+                        ? 'border-green-200 bg-green-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                  >
+                    <div className="text-center">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {addon.name}
+                      </h3>
+                      <p className="text-gray-600 mb-4">{addon.description}</p>
+                      <div className="text-2xl font-bold text-gray-900 mb-4">
+                        ${(addon.price / 100).toFixed(2)}
+                        <span className="text-sm font-normal text-gray-500">/{addon.interval}</span>
+                      </div>
+
+                      {isAlreadyActive ? (
+                        <div className="bg-green-100 text-green-800 px-4 py-2 rounded-lg text-sm font-medium">
+                          ✓ Already Active
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleAddonCheckout(addonId)}
+                          disabled={loading}
+                          className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loading ? 'Processing...' : 'Add to Subscription'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -222,11 +307,10 @@ export default function PricingPage() {
           {plansData && Object.entries(plansData.plans).map(([planId, plan]) => (
             <div
               key={planId}
-              className={`relative rounded-lg border-2 p-6 cursor-pointer transition-all ${
-                selectedPlan === planId
+              className={`relative rounded-lg border-2 p-6 cursor-pointer transition-all ${selectedPlan === planId
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
+                }`}
               onClick={() => setSelectedPlan(planId as any)}
             >
               {selectedPlan === planId && (
@@ -236,7 +320,7 @@ export default function PricingPage() {
                   </span>
                 </div>
               )}
-              
+
               <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
               <div className="mb-4">
                 <span className="text-4xl font-bold text-gray-900">
@@ -244,7 +328,7 @@ export default function PricingPage() {
                 </span>
                 <span className="text-gray-600">/{plan.interval}</span>
               </div>
-              
+
               <ul className="space-y-2 mb-6">
                 {plan.features.map((feature, index) => (
                   <li key={index} className="flex items-center text-gray-600">
@@ -255,7 +339,7 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              
+
               <div className="text-sm text-blue-600 font-medium">
                 {plan.trial_days}-day free trial
               </div>
@@ -270,11 +354,10 @@ export default function PricingPage() {
             {plansData && Object.entries(plansData.addons).map(([addonId, addon]) => (
               <div
                 key={addonId}
-                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                  selectedAddons.includes(addonId)
+                className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${selectedAddons.includes(addonId)
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
-                }`}
+                  }`}
                 onClick={() => toggleAddon(addonId)}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -306,7 +389,7 @@ export default function PricingPage() {
               <div className="text-sm text-gray-600">After 14-day free trial</div>
             </div>
           </div>
-          
+
           <button
             onClick={handleCheckout}
             disabled={loading}
@@ -314,7 +397,7 @@ export default function PricingPage() {
           >
             {loading ? 'Processing...' : 'Start Free Trial'}
           </button>
-          
+
           <p className="text-center text-sm text-gray-600 mt-4">
             You'll be redirected to Stripe to complete your subscription.
             Cancel anytime during your trial.

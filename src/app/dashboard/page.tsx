@@ -23,10 +23,13 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // Get main subscription (any status)
       const { data: sub } = await supabase
         .from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single()
 
       if (sub) {
@@ -38,6 +41,41 @@ export default function DashboardPage() {
           .eq('subscription_id', sub.id)
 
         setAddons(addonData || [])
+      } else {
+        // Check for standalone add-ons (add-ons without main subscription)
+        const { data: addonData } = await supabase
+          .from('subscription_addons')
+          .select(`
+            *,
+            subscriptions!inner(*)
+          `)
+          .eq('subscriptions.user_id', user.id)
+
+        if (addonData && addonData.length > 0) {
+          // Create a virtual subscription for standalone add-ons
+          setSubscription({
+            id: 'standalone-addons',
+            user_id: user.id,
+            stripe_subscription_id: 'standalone',
+            stripe_customer_id: addonData[0].subscriptions.stripe_customer_id || '',
+            plan_id: 'addons-only',
+            status: 'active' as const,
+            current_period_start: addonData[0].subscriptions.current_period_start,
+            current_period_end: addonData[0].subscriptions.current_period_end,
+            trial_start: null,
+            trial_end: null,
+            created_at: addonData[0].subscriptions.created_at,
+            updated_at: addonData[0].subscriptions.updated_at
+          })
+          setAddons(addonData.map(item => ({
+            id: item.id,
+            subscription_id: item.subscription_id,
+            addon_id: item.addon_id,
+            quantity: item.quantity,
+            created_at: item.created_at,
+            updated_at: item.updated_at
+          })))
+        }
       }
     } catch (error) {
       console.error('Error loading subscription:', error)
@@ -134,7 +172,13 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Plan</h3>
-                  <p className="text-gray-600 capitalize">{subscription.plan_id}</p>
+                  <p className="text-gray-600 capitalize">
+                    {subscription.plan_id === 'addons-only' ? 'Add-ons Only' : 
+                     subscription.plan_id === 'extra_storage' ? 'Extra Storage' :
+                     subscription.plan_id === 'premium_support' ? 'Premium Support' :
+                     subscription.plan_id === 'advanced_analytics' ? 'Advanced Analytics' :
+                     subscription.plan_id}
+                  </p>
                 </div>
                 
                 <div>
@@ -153,7 +197,9 @@ export default function DashboardPage() {
 
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">Stripe Subscription ID</h3>
-                  <p className="text-gray-600 font-mono text-sm">{subscription.stripe_subscription_id}</p>
+                  <p className="text-gray-600 font-mono text-sm">
+                    {subscription.stripe_subscription_id === 'standalone' ? 'Multiple Add-ons' : subscription.stripe_subscription_id}
+                  </p>
                 </div>
               </div>
             </div>
