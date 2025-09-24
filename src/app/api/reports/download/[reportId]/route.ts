@@ -5,9 +5,10 @@ import { gatherReportData } from '@/lib/reports/report-generator'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { reportId: string } }
+  { params }: { params: Promise<{ reportId: string }> }
 ) {
   try {
+    const { reportId } = await params
     const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -19,7 +20,7 @@ export async function GET(
     const { data: report, error: reportError } = await supabase
       .from('auto_reports')
       .select('*')
-      .eq('id', params.reportId)
+      .eq('id', reportId)
       .eq('user_id', user.id) // Ensure user can only access their own reports
       .single()
 
@@ -42,10 +43,10 @@ export async function GET(
 
     const pdfBuffer = generateReportPDF(reportData)
 
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(pdfBuffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="report-${params.reportId}.pdf"`,
+        'Content-Disposition': `attachment; filename="report-${reportId}.pdf"`,
       },
     })
   } catch (error) {

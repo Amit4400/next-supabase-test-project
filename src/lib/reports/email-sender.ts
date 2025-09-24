@@ -21,6 +21,10 @@ export async function sendReportEmail(data: EmailReportData) {
 
     // Convert PDF buffer to base64 for Brevo
     const pdfBase64 = data.pdfBuffer.toString('base64')
+    console.log('PDF buffer size:', data.pdfBuffer.length, 'bytes')
+    console.log('Base64 length:', pdfBase64.length, 'characters')
+    console.log('PDF buffer is Buffer:', Buffer.isBuffer(data.pdfBuffer))
+    console.log('First 50 chars of base64:', pdfBase64.substring(0, 50))
 
     const emailPayload = {
       sender: {
@@ -29,7 +33,7 @@ export async function sendReportEmail(data: EmailReportData) {
       },
       to: [
         {
-          email: data.to,
+          email: 'amitsoftradix6@gmail.com',
           name: data.userName
         }
       ],
@@ -67,13 +71,22 @@ export async function sendReportEmail(data: EmailReportData) {
           </p>
         </div>
       `,
-      attachments: [
+      attachment: [
         {
           content: pdfBase64,
-          name: `weekly-report-${data.period.start}-${data.period.end}.pdf`
+          name: `weekly-report-${data.period.start}-${data.period.end}.pdf`,
+          type: 'application/pdf'
         }
       ]
     }
+
+    console.log('Sending email payload:', {
+      ...emailPayload,
+      attachment: emailPayload.attachment.map(att => ({
+        ...att,
+        content: `${att.content.substring(0, 50)}... (${att.content.length} chars)`
+      }))
+    })
 
     const response = await fetch(BREVO_API_URL, {
       method: 'POST',
@@ -87,7 +100,11 @@ export async function sendReportEmail(data: EmailReportData) {
 
     if (!response.ok) {
       const errorData = await response.json()
-      console.error('Brevo API error:', errorData)
+      console.error('Brevo API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      })
       throw new Error(`Brevo API error: ${response.status} - ${errorData.message || 'Unknown error'}`)
     }
 

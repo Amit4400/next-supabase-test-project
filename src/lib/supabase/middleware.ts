@@ -42,6 +42,7 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/api/stripe/webhook') &&
     !request.nextUrl.pathname.startsWith('/api/reports/schedule') &&
     !request.nextUrl.pathname.startsWith('/api/plans') &&
+    !request.nextUrl.pathname.startsWith('/api/test-email') &&
     !request.nextUrl.pathname.startsWith('/pricing')
   ) {
     // no user, potentially respond by redirecting the user to the login page
