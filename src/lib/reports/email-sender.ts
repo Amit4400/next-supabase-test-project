@@ -33,7 +33,7 @@ export async function sendReportEmail(data: EmailReportData) {
       },
       to: [
         {
-          email: 'amitsoftradix6@gmail.com',
+          email: data.to,
           name: data.userName
         }
       ],
