@@ -124,30 +124,6 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Demo Credentials</span>
-              </div>
-            </div>
-
-            <div className="mt-4 bg-gray-50 rounded-md p-4">
-              <p className="text-sm text-gray-600 mb-2">
-                For testing purposes, you can use:
-              </p>
-              <div className="text-sm font-mono text-gray-800">
-                <div>Email: demo@yopmail.com</div>
-                <div>Password: Demo@123</div>
-              </div>
-              <p className="text-xs text-gray-500 mt-2">
-                Or create a new account with any email/password combination.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
