@@ -1,0 +1,9 @@
+// vercel.json - Add this file to your project root
+{
+  "crons": [
+    {
+      "path": "/api/reports/schedule",
+      "schedule": "0 9 * * 1"
+    }
+  ]
+}
